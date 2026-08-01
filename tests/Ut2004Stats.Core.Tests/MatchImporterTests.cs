@@ -147,16 +147,94 @@ public class MatchImporterTests : IDisposable
     }
 
     [Fact]
-    public async Task Ignores_in_progress_log_files()
+    public async Task Imports_a_finished_match_still_named_log_tmp()
     {
-        // The engine only renames to .log once the match ends.
-        var path = Path.Combine(_dir, "Stats_7777_2026_08_01_19_00_00.log.tmp");
-        File.WriteAllText(path, "0.00\tNG\tpartial");
+        // The engine does not reliably rename .log.tmp when a match ends, so a
+        // finished match is frequently only ever present as a temporary file.
+        var path = WriteLog("Stats_7777_2026_08_01_19_00_00.log.tmp",
+            "10.00\tK\t0\tDamTypeRocket\t1\tRocketLauncher");
 
         await using var db = NewContext();
-        var results = await NewImporter(db).ImportDirectoryAsync(_dir);
+        var result = await NewImporter(db).ImportFileAsync(path);
 
-        Assert.Empty(results);
+        Assert.Equal(ImportOutcome.Imported, result.Outcome);
+        // Stored under the finalised name so a later rename is not a second match.
+        Assert.Equal("Stats_7777_2026_08_01_19_00_00.log",
+            (await db.Matches.SingleAsync()).LogFileName);
+    }
+
+    [Fact]
+    public async Task Does_not_reimport_when_a_tmp_log_is_later_renamed()
+    {
+        var tmp = WriteLog("Stats_7777_2026_08_01_20_00_00.log.tmp",
+            "10.00\tK\t0\tDamTypeRocket\t1\tRocketLauncher");
+
+        await using (var db = NewContext())
+            Assert.Equal(ImportOutcome.Imported, (await NewImporter(db).ImportFileAsync(tmp)).Outcome);
+
+        // The engine finalises the name; it is still the same match.
+        var final = tmp[..^4];
+        File.Move(tmp, final);
+
+        await using (var db = NewContext())
+            Assert.Equal(ImportOutcome.AlreadyImported, (await NewImporter(db).ImportFileAsync(final)).Outcome);
+
+        await using (var verify = NewContext())
+            Assert.Equal(1, await verify.Matches.CountAsync());
+    }
+
+    [Fact]
+    public async Task Skips_a_match_that_is_still_being_played()
+    {
+        // No end-of-game record yet: the game is still running.
+        var path = Path.Combine(_dir, "Stats_7777_2026_08_01_21_00_00.log.tmp");
+        File.WriteAllText(path, string.Join('\n',
+        [
+            "0.00\tNG\t2026-08-01 21:00:00\tAUS\tDM-Rankin\tRankin\tEpic\tXGame.xDeathMatch\tDeathmatch\t",
+            "1.00\tC\t0\tLoque",
+            "5.00\tSG",
+            "10.00\tK\t0\tDamTypeRocket\t1\tRocketLauncher",
+        ]));
+
+        await using var db = NewContext();
+        var result = await NewImporter(db).ImportFileAsync(path);
+
+        Assert.Equal(ImportOutcome.Incomplete, result.Outcome);
+        Assert.Equal(0, await db.Matches.CountAsync());
+    }
+
+    [Fact]
+    public async Task Imports_a_real_log_ended_by_a_map_change()
+    {
+        // Verbatim shape of a log from a live server: six-field connect record,
+        // name set by a following NameChange, and ended by a map vote.
+        var path = Path.Combine(_dir, "Stats_7777_2026_08_01_14_18_22.log.tmp");
+        File.WriteAllText(path, string.Join('\n',
+        [
+            "0\tNG\t2026-8-1 14:18:22\t0\tONS-Urban\tUrban\tEpic\tOnslaught.ONSOnslaughtGame\tOnslaught\tMutators=Onslaught.ONSDefaultMut",
+            "0\tSI\tTech Bros\t0\t\t\t\t\\ServerMode\\dedicated\\GoalScore\\3\\TimeLimit\\20",
+            "1\tC\t1\t87ab14fbea1d945c7ae1b98f54a62ffc\tpyrocubes\t07570b575742",
+            "1\tG\tNameChange\t1\tpyrocubes",
+            "1\tG\tTeamChange\t1\t0",
+            "22\tSG",
+            "86\tK\t1\tDamTypeRedeemer\t1\tAssaultRifle",
+            "86\tS\t1\t-1.00\tself_frag",
+            "168\tS\t1\t1.00\tfrag",
+            "184\tEG\tmapchange\t1",
+        ]));
+
+        await using var db = NewContext();
+        var result = await NewImporter(db).ImportFileAsync(path);
+
+        Assert.Equal(ImportOutcome.Imported, result.Outcome);
+
+        var match = await db.Matches.Include(m => m.Map).Include(m => m.Players).SingleAsync();
+        Assert.Equal("ONS-Urban", match.Map.Name);
+
+        var player = Assert.Single(match.Players);
+        Assert.Equal("pyrocubes", player.NameUsed);
+        Assert.Equal(1, player.Suicides);   // killer == victim
+        Assert.Equal(0, player.Frags);
     }
 
     [Fact]

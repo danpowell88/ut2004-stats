@@ -9,6 +9,9 @@ nothing to click to import — matches appear on their own as they finish.
 
 ![Dashboard](docs/dashboard.jpg)
 
+<sub>Dashboard shown with generated sample data, so the charts have something to
+show. A fresh install starts empty and fills in as matches finish.</sub>
+
 ## Why
 
 The classic tool for this is [UTStatsDB](https://github.com/shrimpza/utstatsdb) — PHP
@@ -81,15 +84,33 @@ local-only logger.
 
 Logs land in the server's `UserLogs/` directory as
 `Stats_<port>_<yyyy>_<MM>_<dd>_<HH>_<mm>_<ss>.log`. Mount that directory as
-`/data/logs`. A match in progress is written as `.log.tmp` and is ignored until
-the engine finalises it.
+`/data/logs`.
+
+The engine writes to `.log.tmp` and is **not** reliable about renaming the file
+when a match ends — on many servers every log stays `.tmp` forever. Both
+extensions are therefore read, and a match still in progress is filtered out by
+the completeness rules below rather than by its file name. A log imported while
+still `.tmp` is keyed on its finalised name, so a later rename does not produce a
+duplicate.
+
+### File permissions
+
+The game server writes its logs as mode `0600` owned by its own user, so a stats
+container running as a different user cannot read them — the symptom is
+`UnauthorizedAccessException: Permission denied` for every log.
+
+The image runs as a non-root user by default. If the two containers do not share
+a uid, either run this one as root (`--user 0:0`; the log mount is read-only, so
+it only ever reads them) or match the game server's uid.
 
 ### What counts as a match
 
-Only games that actually reached a conclusion are imported — a frag limit, time
-limit, score limit, round limit, last-man-standing or a draw. Matches ended by a
-map change or a server restart are skipped, as are warm-up rounds. This mirrors
-UTStatsDB's behaviour and keeps abandoned games out of the ladder.
+Imported: frag limit, time limit, score limit, round limit, last man standing, a
+draw — and **map changes**. A map change is how most games end on a server with
+map voting, and the play up to the switch is real, so it counts.
+
+Skipped: warm-up rounds, server shutdowns, and anything with no end-of-game
+record at all (a game still in progress, or a log cut short by a crash).
 
 ## Notes on the log format
 
@@ -111,7 +132,7 @@ A few things worth knowing, since they shape what the site can show:
 ## Development
 
 ```bash
-dotnet test     # 62 tests: log parsing and import behaviour
+dotnet test     # 65 tests: log parsing and import behaviour
 dotnet build
 ```
 

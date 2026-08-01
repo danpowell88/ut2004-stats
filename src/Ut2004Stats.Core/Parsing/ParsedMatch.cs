@@ -120,9 +120,15 @@ public class ParsedMatch
     public List<ParsedSpecial> Specials { get; } = [];
 
     /// <summary>
-    /// A match is only worth importing when it started properly and reached a real
-    /// conclusion. Warm-ups, mid-game map changes and server quits are excluded.
+    /// A match is worth importing when it started properly and produced a result.
     /// </summary>
+    /// <remarks>
+    /// <para>Map changes count. On a server with map voting most games end that way,
+    /// and the stats accumulated up to the switch are real — excluding them would
+    /// throw away the majority of play. This matches UTStatsDB's default.</para>
+    /// <para>Warm-up rounds and server shutdowns are still excluded: the first is
+    /// not a real game, and the second usually means the log was cut short.</para>
+    /// </remarks>
     public bool IsComplete =>
         SawNewGame
         && SawStartGame
@@ -134,5 +140,6 @@ public class ParsedMatch
             or ParsedEndReason.LastMan
             or ParsedEndReason.Draw
             or ParsedEndReason.Artifacts
+            or ParsedEndReason.MapChange
         && Players.Count > 0;
 }

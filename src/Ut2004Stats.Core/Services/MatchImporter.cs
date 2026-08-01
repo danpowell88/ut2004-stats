@@ -27,9 +27,15 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
     private readonly StatsLogParser _parser = new();
 
     /// <summary>
-    /// Imports every completed log in a directory. In-progress logs (<c>.log.tmp</c>)
-    /// are skipped — the engine only finalises the name once the match ends.
+    /// Imports every finished match in a directory.
     /// </summary>
+    /// <remarks>
+    /// Both <c>.log</c> and <c>.log.tmp</c> are read. The engine writes to
+    /// <c>.log.tmp</c> and does not reliably rename it when a match ends, so
+    /// ignoring the temporary files would mean importing nothing at all on some
+    /// servers. A match still in progress has no end-of-game record and is
+    /// rejected by the completeness check, so reading them early is safe.
+    /// </remarks>
     public async Task<IReadOnlyList<ImportResult>> ImportDirectoryAsync(
         string directory, CancellationToken ct = default)
     {
@@ -41,10 +47,8 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
 
         var results = new List<ImportResult>();
 
-        // The extension is re-checked explicitly: Windows pattern matching can let
-        // longer extensions (notably the in-progress ".log.tmp") slip through.
-        var logs = Directory.EnumerateFiles(directory, "*.log")
-            .Where(p => Path.GetExtension(p).Equals(".log", StringComparison.OrdinalIgnoreCase))
+        var logs = Directory.EnumerateFiles(directory, "*.log*")
+            .Where(IsStatsLog)
             .Order();
 
         foreach (var path in logs)
@@ -63,10 +67,13 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
     public async Task<ImportResult> ImportFileAsync(string path, CancellationToken ct = default)
     {
         var fileName = Path.GetFileName(path);
+        // Key on the name without ".tmp" so a log imported while temporary is not
+        // imported a second time if the engine later renames it.
+        var key = LogKey(fileName);
 
         try
         {
-            if (await db.Matches.AnyAsync(m => m.LogFileName == fileName, ct))
+            if (await db.Matches.AnyAsync(m => m.LogFileName == key, ct))
                 return new ImportResult(fileName, ImportOutcome.AlreadyImported);
 
             var parsed = _parser.ParseFile(path);
@@ -90,6 +97,26 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
         }
     }
 
+    /// <summary>
+    /// True for the engine's stats logs: <c>*.log</c> and the in-progress
+    /// <c>*.log.tmp</c>, but nothing else that may share the directory.
+    /// </summary>
+    private static bool IsStatsLog(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".log.tmp", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The identity of a log, independent of whether the engine has finalised it.
+    /// <c>Stats_7777_….log.tmp</c> and <c>Stats_7777_….log</c> are the same match.
+    /// </summary>
+    internal static string LogKey(string fileName) =>
+        fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^4]
+            : fileName;
+
     private static string DescribeIncomplete(ParsedMatch m)
     {
         if (!m.SawNewGame) return "no game start record";
@@ -97,8 +124,7 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
         if (m.Players.Count == 0) return "no players";
         return m.EndReason switch
         {
-            ParsedEndReason.None => "match did not finish",
-            ParsedEndReason.MapChange => "ended by map change",
+            ParsedEndReason.None => "still in progress",
             ParsedEndReason.ServerQuit => "ended by server shutdown",
             ParsedEndReason.EndWarmup => "warm-up round",
             _ => $"unusable end reason ({m.EndReason})",
@@ -126,7 +152,7 @@ public class MatchImporter(StatsDbContext db, ILogger<MatchImporter> logger)
             RedScore = isTeamGame ? (int)Math.Round(parsed.TeamScores[Teams.Red]) : 0,
             BlueScore = isTeamGame ? (int)Math.Round(parsed.TeamScores[Teams.Blue]) : 0,
             Mutators = parsed.Mutators,
-            LogFileName = parsed.LogFileName,
+            LogFileName = LogKey(parsed.LogFileName),
             ImportedAt = DateTime.UtcNow,
         };
 

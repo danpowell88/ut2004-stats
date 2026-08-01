@@ -272,17 +272,19 @@ public class StatsLogParserTests
     [InlineData("teamscorelimit")]
     [InlineData("goalscorelimit")]
     [InlineData("lastman")]
-    public void Accepts_matches_that_reached_a_real_conclusion(string reason)
+    // A map change is how most games end on a server with map voting, and the play
+    // up to the switch is real, so it counts.
+    [InlineData("mapchange")]
+    public void Accepts_matches_that_produced_a_result(string reason)
     {
         var m = Parse(Log("10.00\tK\t0\tDamTypeRocket\t1\tRocketLauncher", reason));
         Assert.True(m.IsComplete);
     }
 
     [Theory]
-    [InlineData("mapchange")]
     [InlineData("serverquit")]
     [InlineData("endwarmup")]
-    public void Rejects_matches_that_did_not_finish(string reason)
+    public void Rejects_warmups_and_server_shutdowns(string reason)
     {
         var m = Parse(Log("10.00\tK\t0\tDamTypeRocket\t1\tRocketLauncher", reason));
         Assert.False(m.IsComplete);
