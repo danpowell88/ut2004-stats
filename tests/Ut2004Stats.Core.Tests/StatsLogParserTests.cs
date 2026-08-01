@@ -395,3 +395,24 @@ public class GameCatalogTests
     public void Derives_map_prefix(string map, string expected)
         => Assert.Equal(expected, GameCatalog.MapPrefix(map));
 }
+
+public class ModAffixTests
+{
+    [Theory]
+    // UTComp replaces the stock weapons with BS_-prefixed subclasses.
+    [InlineData("BS_DamTypeRocket", "Rocket Launcher")]
+    [InlineData("BS_FlakCannon", "Flak Cannon")]
+    [InlineData("BS_DamTypeShockBeam", "Shock Rifle")]
+    // UTComp's enhanced netcode weapons.
+    [InlineData("NewNet_DamTypeSniperShot", "Lightning Gun")]
+    [InlineData("NewNet_SuperShockRifle", "Instagib Rifle")]
+    // Other mods that decorate class names the same way.
+    [InlineData("OLTeamsDamTypeRocket", "Rocket Launcher")]
+    [InlineData("DamTypeRocket_3SPN", "Rocket Launcher")]
+    public void Resolves_weapons_through_mod_affixes(string raw, string expected)
+        => Assert.Equal(expected, GameCatalog.WeaponName(raw));
+
+    [Fact]
+    public void Leaves_a_genuine_mod_weapon_readable()
+        => Assert.Equal("Plasma Cannon", GameCatalog.WeaponName("BS_PlasmaCannon"));
+}

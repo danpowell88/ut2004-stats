@@ -224,7 +224,7 @@ public static partial class GameCatalog
     {
         if (string.IsNullOrWhiteSpace(className)) return "Unknown";
 
-        var name = ShortName(className);
+        var name = StripModAffixes(ShortName(className));
         if (Weapons.TryGetValue(name, out var known)) return known;
 
         // Unwrap damage-type decoration and retry — longest affix first so that
@@ -242,6 +242,31 @@ public static partial class GameCatalog
     public static bool IsHeadshot(string damageType) =>
         !string.IsNullOrEmpty(damageType)
         && damageType.Contains("HeadShot", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Removes the decoration popular server mods add to weapon and damage-type
+    /// classes, so a UTComp server's <c>BS_DamTypeRocket</c> still resolves to
+    /// the Rocket Launcher rather than being treated as unknown mod content.
+    /// </summary>
+    private static string StripModAffixes(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+
+        // Prefixes, longest first so a shorter one cannot claim the match.
+        string[] prefixes = ["ut2vweap", "OLTeams", "NewNet_", "BS_"];
+        foreach (var prefix in prefixes)
+        {
+            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length > prefix.Length)
+                return name[prefix.Length..];
+        }
+
+        // Team ArenaMaster suffixes its classes instead.
+        const string suffix = "_3SPN";
+        if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && name.Length > suffix.Length)
+            return name[..^suffix.Length];
+
+        return name;
+    }
 
     /// <summary>Takes the class portion of a <c>Package.Class</c> reference.</summary>
     public static string ShortName(string className)

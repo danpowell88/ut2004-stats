@@ -132,7 +132,7 @@ A few things worth knowing, since they shape what the site can show:
 ## Development
 
 ```bash
-dotnet test     # 65 tests: log parsing and import behaviour
+dotnet test     # 73 tests: log parsing and import behaviour
 dotnet build
 ```
 
