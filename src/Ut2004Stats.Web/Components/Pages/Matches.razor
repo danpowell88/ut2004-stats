@@ -1,0 +1,22 @@
+@page "/matches"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+
+<PageTitle>Matches · UT2004 Stats</PageTitle>
+
+<div class="page-head">
+    <h1>Matches</h1>
+    <p>Every completed match on the server, newest first.</p>
+</div>
+
+<div class="card">
+    <MatchTable Matches="_matches" />
+</div>
+
+@code {
+    private IReadOnlyList<MatchSummary> _matches = [];
+
+    protected override async Task OnInitializedAsync()
+        => _matches = await Stats.GetRecentMatchesAsync(take: 100);
+}

@@ -1,0 +1,70 @@
+@using Ut2004Stats.Core.Services
+@* Shared match list, used on the dashboard, the matches page and player profiles. *@
+
+@if (Matches.Count == 0)
+{
+    <p class="muted">No matches yet.</p>
+}
+else
+{
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th class="name">Map</th>
+                    <th>Mode</th>
+                    <th>Result</th>
+                    <th class="name">Top Scorer</th>
+                    <th class="num">Players</th>
+                    <th class="num">Length</th>
+                    <th>Played</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Matches)
+                {
+                    <tr>
+                        <td class="name">
+                            <a href="matches/@m.Id">
+                                <span class="tag-prefix">@(string.IsNullOrEmpty(m.MapPrefix) ? "MAP" : m.MapPrefix)</span>
+                                <span style="margin-left:8px">@StripPrefix(m.Map)</span>
+                            </a>
+                        </td>
+                        <td>@m.GameType</td>
+                        <td>
+                            @if (m.IsTeamGame)
+                            {
+                                <span class="@Format.TeamPillClass(0)">
+                                    <span class="pill-dot"></span>@m.RedScore
+                                </span>
+                                <span class="muted" style="margin: 0 4px">–</span>
+                                <span class="@Format.TeamPillClass(1)">
+                                    <span class="pill-dot"></span>@m.BlueScore
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="muted">—</span>
+                            }
+                        </td>
+                        <td class="name">@m.TopPlayer <span class="muted mono">@m.TopScore</span></td>
+                        <td class="num">@m.PlayerCount</td>
+                        <td class="num">@Format.Duration(m.DurationMinutes)</td>
+                        <td class="muted">@Format.Ago(m.StartedAt)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MatchSummary> Matches { get; set; } = [];
+
+    /// <summary>The prefix is already shown as a chip, so drop it from the name.</summary>
+    private static string StripPrefix(string map)
+    {
+        var idx = map.IndexOf('-');
+        return idx > 0 && idx < map.Length - 1 ? map[(idx + 1)..] : map;
+    }
+}

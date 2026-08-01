@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+
+<div class="app">
+    <header class="topbar">
+        <a href="" class="brand">
+            <span class="brand-mark">UT</span>
+            <span>UT2004 Stats</span>
+        </a>
+
+        <nav class="nav">
+            <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
+            <NavLink href="matches">Matches</NavLink>
+            <NavLink href="players">Players</NavLink>
+            <NavLink href="maps">Maps</NavLink>
+            <NavLink href="weapons">Weapons</NavLink>
+        </nav>
+
+        <button class="theme-toggle" onclick="toggleTheme()"
+                title="Toggle light / dark" aria-label="Toggle light or dark theme">◐</button>
+    </header>
+
+    <main class="page">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

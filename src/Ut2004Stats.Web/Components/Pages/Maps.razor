@@ -1,0 +1,76 @@
+@page "/maps"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+
+<PageTitle>Maps · UT2004 Stats</PageTitle>
+
+<div class="page-head">
+    <h1>Maps</h1>
+    <p>Which maps the server actually plays, and how long a game lasts on each.</p>
+</div>
+
+<div class="grid grid-sidebar">
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Rotation</h2>
+                <p>Ranked by matches played</p>
+            </div>
+        </div>
+
+        @if (_maps.Count == 0)
+        {
+            <p class="muted">No maps played yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="rank">#</th>
+                            <th class="name">Map</th>
+                            <th>Mode</th>
+                            <th class="num">Matches</th>
+                            <th class="num">Avg length</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (m, i) in _maps.Select((m, i) => (m, i)))
+                        {
+                            <tr>
+                                <td class="rank @Format.RankClass(i)">@(i + 1)</td>
+                                <td class="name">@m.Map</td>
+                                <td><span class="tag-prefix">@(string.IsNullOrEmpty(m.Prefix) ? "—" : m.Prefix)</span></td>
+                                <td class="num">@m.Matches</td>
+                                <td class="num">@Format.Duration(m.AvgDurationMinutes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Popularity</h2>
+                <p>Matches per map</p>
+            </div>
+        </div>
+        <BarList Items="_bars" Color="var(--series-2)" />
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<MapPopularity> _maps = [];
+    private List<BarList.Item> _bars = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _maps = await Stats.GetMapPopularityAsync(take: 100);
+        _bars = [.. _maps.Take(12).Select(m => new BarList.Item(m.Map, m.Matches, m.Matches.ToString("N0")))];
+    }
+}

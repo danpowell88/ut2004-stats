@@ -1,0 +1,15 @@
+services:
+  ut2004-stats:
+    build: .
+    image: ut2004-stats:latest
+    container_name: ut2004-stats
+    restart: unless-stopped
+    ports:
+      - "8078:8080"
+    volumes:
+      # The game server's stats directory. Read-only: this app never writes there.
+      - ./data/logs:/data/logs:ro
+      # SQLite database. Delete it to force a full re-import of every log.
+      - ./data/db:/data/db
+    environment:
+      Stats__ScanInterval: "00:01:00"

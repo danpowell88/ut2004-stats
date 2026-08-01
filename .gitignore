@@ -1,0 +1,24 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+## Local database and logs
+*.db
+*.db-shm
+*.db-wal
+data/
+logs/
+
+## OS
+.DS_Store
+Thumbs.db

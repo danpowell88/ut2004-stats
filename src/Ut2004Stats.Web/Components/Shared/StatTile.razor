@@ -1,0 +1,17 @@
+@* A single headline figure. The colour hairline keys the tile without tinting text. *@
+
+<div class="stat" style="--tile-accent: @Accent">
+    <div class="stat-label">@Label</div>
+    <div class="stat-value">@Value</div>
+    @if (!string.IsNullOrEmpty(Sub))
+    {
+        <div class="stat-sub">@Sub</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Sub { get; set; }
+    [Parameter] public string Accent { get; set; } = "var(--series-1)";
+}

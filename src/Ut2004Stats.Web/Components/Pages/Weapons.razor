@@ -1,0 +1,78 @@
+@page "/weapons"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+
+<PageTitle>Weapons · UT2004 Stats</PageTitle>
+
+<div class="page-head">
+    <h1>Weapons</h1>
+    <p>
+        What the server actually kills with. Both fire modes of a weapon count
+        together, so the flak shell and the flak chunk are one entry.
+    </p>
+</div>
+
+<div class="grid grid-sidebar">
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Kills by Weapon</h2>
+                <p>All tracked matches</p>
+            </div>
+        </div>
+
+        @if (_weapons.Count == 0)
+        {
+            <p class="muted">No weapon data yet.</p>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="rank">#</th>
+                            <th class="name">Weapon</th>
+                            <th class="num">Kills</th>
+                            <th class="num">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (w, i) in _weapons.Select((w, i) => (w, i)))
+                        {
+                            <tr>
+                                <td class="rank @Format.RankClass(i)">@(i + 1)</td>
+                                <td class="name">@w.Weapon</td>
+                                <td class="num">@w.Kills.ToString("N0")</td>
+                                <td class="num">@w.SharePercent.ToString("0.#")%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Distribution</h2>
+                <p>Share of all kills</p>
+            </div>
+        </div>
+        <BarList Items="_bars" Color="var(--series-1)" />
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<WeaponUsage> _weapons = [];
+    private List<BarList.Item> _bars = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _weapons = await Stats.GetWeaponUsageAsync(take: 40);
+        _bars = [.. _weapons.Take(12)
+            .Select(w => new BarList.Item(w.Weapon, w.Kills, $"{w.SharePercent:0.#}%"))];
+    }
+}

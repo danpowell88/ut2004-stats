@@ -1,0 +1,192 @@
+@page "/matches/{Id:int}"
+@using Ut2004Stats.Core.Domain
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+
+<PageTitle>@(_match is null ? "Match" : _match.Map) · UT2004 Stats</PageTitle>
+
+@if (_loading)
+{
+    <p class="muted">Loading…</p>
+}
+else if (_match is null)
+{
+    <div class="card">
+        <div class="empty">
+            <div class="empty-title">Match not found</div>
+            <p>It may have been removed. <a href="matches">Back to all matches</a>.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="page-head">
+        <div class="row" style="gap: var(--s3)">
+            <span class="tag-prefix">@(string.IsNullOrEmpty(_match.MapPrefix) ? "MAP" : _match.MapPrefix)</span>
+            <h1>@_match.Map</h1>
+        </div>
+        <p>
+            @_match.GameType · @Format.Duration(_match.DurationMinutes) ·
+            @Format.EndReason(_match.EndReason) · @Format.Ago(_match.StartedAt)
+            @if (!string.IsNullOrWhiteSpace(_match.Mutators))
+            {
+                <text> · </text><span class="pill pill-accent">@_match.Mutators</span>
+            }
+        </p>
+    </div>
+
+    @if (_match.IsTeamGame)
+    {
+        <div class="card" style="margin-bottom: var(--s4)">
+            <div class="card-head">
+                <div>
+                    <h2>Final Score</h2>
+                    <p>@Winner</p>
+                </div>
+            </div>
+            <div class="teambar">
+                <div class="red" style="flex: @RedFlex">@_match.RedScore</div>
+                <div class="blue" style="flex: @BlueFlex">@_match.BlueScore</div>
+            </div>
+            <div class="spread" style="margin-top: var(--s2); font-size: 13px">
+                <span style="color: var(--team-red); font-weight: 650">Red</span>
+                <span style="color: var(--team-blue); font-weight: 650">Blue</span>
+            </div>
+        </div>
+    }
+
+    <div class="grid grid-sidebar">
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Scoreboard</h2>
+                    <p>@_match.Scoreboard.Count players · @_match.Server</p>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="rank">#</th>
+                            <th class="name">Player</th>
+                            @if (_match.IsTeamGame)
+                            {
+                                <th>Team</th>
+                            }
+                            <th class="num">Score</th>
+                            <th class="num">Frags</th>
+                            <th class="num">Deaths</th>
+                            <th class="num">K/D</th>
+                            <th class="num">Eff%</th>
+                            <th class="num">Best</th>
+                            <th class="num">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (p, i) in _match.Scoreboard.Select((p, i) => (p, i)))
+                        {
+                            <tr>
+                                <td class="rank @Format.RankClass(i)">@(i + 1)</td>
+                                <td class="name">
+                                    <a href="players/@p.PlayerId">@p.Name</a>
+                                    @if (p.IsBot)
+                                    {
+                                        <span class="pill pill-bot" style="margin-left:6px">BOT</span>
+                                    }
+                                </td>
+                                @if (_match.IsTeamGame)
+                                {
+                                    <td>
+                                        @if (p.Team is Teams.Red or Teams.Blue)
+                                        {
+                                            <span class="@Format.TeamPillClass(p.Team)">
+                                                <span class="pill-dot"></span>@Format.TeamName(p.Team)
+                                            </span>
+                                        }
+                                    </td>
+                                }
+                                <td class="num">@p.Score</td>
+                                <td class="num">@p.Frags</td>
+                                <td class="num">@p.Deaths</td>
+                                <td class="num">@p.Ratio.ToString("0.00")</td>
+                                <td class="num">@p.Efficiency.ToString("0.0")</td>
+                                <td class="num">
+                                    @if (p.BestSpree > 0 || p.BestMultiKill > 0)
+                                    {
+                                        <span title="@BestLabel(p)">@Math.Max(p.BestSpree, p.BestMultiKill)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                </td>
+                                <td class="num">@Format.Duration(p.MinutesPlayed)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Weapons</h2>
+                    <p>Kills by weapon this match</p>
+                </div>
+            </div>
+            <BarList Items="_weapons" Color="var(--series-2)" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private MatchDetail? _match;
+    private List<BarList.Item> _weapons = [];
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _match = await Stats.GetMatchAsync(Id);
+
+        _weapons = _match is null
+            ? []
+            : [.. _match.Weapons
+                .Where(w => w.Kills > 0)
+                .Take(12)
+                .Select(w => new BarList.Item(w.Weapon, w.Kills, $"{w.Kills} · {w.SharePercent:0.#}%"))];
+
+        _loading = false;
+    }
+
+    private string Winner => _match is null
+        ? ""
+        : _match.RedScore == _match.BlueScore
+            ? "Draw"
+            : _match.RedScore > _match.BlueScore ? "Red team won" : "Blue team won";
+
+    // Flex weights give each side a share of the bar, with a floor so a
+    // shut-out still shows the losing team's segment.
+    private double RedFlex => Flex(_match?.RedScore ?? 0, _match?.BlueScore ?? 0);
+    private double BlueFlex => Flex(_match?.BlueScore ?? 0, _match?.RedScore ?? 0);
+
+    private static double Flex(int own, int other)
+    {
+        var total = own + other;
+        if (total <= 0) return 1;
+        return Math.Max(0.18, (double)own / total);
+    }
+
+    private static string BestLabel(MatchScoreboardRow p)
+    {
+        var parts = new List<string>();
+        if (p.BestSpree > 0) parts.Add(Format.Spree(p.BestSpree));
+        if (p.BestMultiKill > 0) parts.Add(Format.MultiKill(p.BestMultiKill));
+        return string.Join(" · ", parts);
+    }
+}

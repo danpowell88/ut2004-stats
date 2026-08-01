@@ -1,0 +1,180 @@
+@page "/"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+@inject IConfiguration Config
+
+<PageTitle>Dashboard · UT2004 Stats</PageTitle>
+
+<div class="page-head">
+    <h1>Server Dashboard</h1>
+    <p>
+        @if (_summary is { Matches: > 0 } s)
+        {
+            @($"{s.Matches:N0} matches tracked")
+            @if (s.LastMatch is { } last)
+            {
+                <text> · last played @Format.Ago(last)</text>
+            }
+        }
+        else
+        {
+            <text>Waiting for the first completed match.</text>
+        }
+    </p>
+</div>
+
+@if (_summary is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (_summary.Matches == 0)
+{
+    <div class="card">
+        <div class="empty">
+            <div class="empty-title">No matches imported yet</div>
+            <p>
+                Stats appear here as soon as a match finishes on the server.<br />
+                Logs are read from <code>@LogDirectory</code>.
+            </p>
+            <p class="muted" style="margin-top:16px">
+                Only completed matches count &mdash; a game that ends by map change or
+                server restart is skipped.
+            </p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="grid grid-4" style="margin-bottom: var(--s4)">
+        <StatTile Label="Matches" Value="@_summary.Matches.ToString("N0")"
+                  Accent="var(--series-1)" />
+        <StatTile Label="Players" Value="@_summary.Players.ToString("N0")"
+                  Accent="var(--series-3)" />
+        <StatTile Label="Total Frags" Value="@_summary.TotalFrags.ToString("N0")"
+                  Accent="var(--series-2)" />
+        <StatTile Label="Hours Played" Value="@_summary.TotalHours.ToString("N1")"
+                  Sub="@($"{_summary.Maps} maps in rotation")" Accent="var(--accent)" />
+    </div>
+
+    <div class="grid grid-sidebar" style="margin-bottom: var(--s4)">
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Activity</h2>
+                    <p>Matches played per day, last 30 days</p>
+                </div>
+            </div>
+            <ActivityChart Points="_activity" />
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Gametypes</h2>
+                    <p>Matches by mode</p>
+                </div>
+            </div>
+            <BarList Items="_gameTypes" Color="var(--series-3)" />
+        </div>
+    </div>
+
+    <div class="grid grid-sidebar">
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Top Players</h2>
+                    <p>Ranked by total frags</p>
+                </div>
+                <a class="link-more" href="players">All players &rarr;</a>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="rank">#</th>
+                            <th class="name">Player</th>
+                            <th class="num">Frags</th>
+                            <th class="num">Deaths</th>
+                            <th class="num">K/D</th>
+                            <th class="num">Eff%</th>
+                            <th class="num">Matches</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (p, i) in _leaders.Select((p, i) => (p, i)))
+                        {
+                            <tr>
+                                <td class="rank @Format.RankClass(i)">@(i + 1)</td>
+                                <td class="name">
+                                    <a href="players/@p.PlayerId">@p.Name</a>
+                                    @if (p.IsBot)
+                                    {
+                                        <span class="pill pill-bot" style="margin-left:6px">BOT</span>
+                                    }
+                                </td>
+                                <td class="num">@p.Frags.ToString("N0")</td>
+                                <td class="num">@p.Deaths.ToString("N0")</td>
+                                <td class="num">@p.Ratio.ToString("0.00")</td>
+                                <td class="num">@p.Efficiency.ToString("0.0")</td>
+                                <td class="num">@p.Matches</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Most Played Maps</h2>
+                    <p>By match count</p>
+                </div>
+            </div>
+            <BarList Items="_maps" Color="var(--series-2)" />
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: var(--s4)">
+        <div class="card-head">
+            <div>
+                <h2>Recent Matches</h2>
+                <p>Newest first</p>
+            </div>
+            <a class="link-more" href="matches">All matches &rarr;</a>
+        </div>
+        <MatchTable Matches="_recent" />
+    </div>
+}
+
+@code {
+    private SiteSummary? _summary;
+    private IReadOnlyList<LeaderboardRow> _leaders = [];
+    private IReadOnlyList<MatchSummary> _recent = [];
+    private List<BarList.Item> _maps = [];
+    private List<BarList.Item> _gameTypes = [];
+    private List<ActivityChart.Point> _activity = [];
+
+    private string LogDirectory => Config["Stats:LogDirectory"] ?? "/data/logs";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _summary = await Stats.GetSummaryAsync();
+        if (_summary.Matches == 0) return;
+
+        _leaders = await Stats.GetLeaderboardAsync(take: 10);
+        _recent = await Stats.GetRecentMatchesAsync(take: 8);
+
+        _maps = [.. (await Stats.GetMapPopularityAsync(take: 8))
+            .Select(m => new BarList.Item(m.Map, m.Matches, m.Matches.ToString("N0")))];
+
+        _gameTypes = [.. (await Stats.GetGameTypeBreakdownAsync())
+            .Take(8)
+            .Select(g => new BarList.Item(g.Name, g.Count, g.Count.ToString("N0")))];
+
+        _activity = [.. (await Stats.GetActivityAsync(30))
+            .Select(p => new ActivityChart.Point(p.Date.ToString("d MMM"), p.Matches))];
+    }
+}

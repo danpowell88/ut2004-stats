@@ -1,0 +1,44 @@
+@*
+    Ranked horizontal bars. Every row is directly labelled with its value, so the
+    chart never relies on colour or on reading a bar against an axis.
+*@
+
+@if (Items.Count == 0)
+{
+    <p class="muted">No data yet.</p>
+}
+else
+{
+    @foreach (var item in Items)
+    {
+        <div class="barrow">
+            <div class="barrow-head">
+                <span class="barrow-label">@item.Label</span>
+                <span class="barrow-value">@item.Display</span>
+            </div>
+            <div class="barrow-track">
+                <div class="barrow-fill"
+                     style="width: @(Width(item.Value).ToString(Culture))%; --bar-color: @Color"></div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    public record Item(string Label, double Value, string Display);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Item> Items { get; set; } = [];
+    [Parameter] public string Color { get; set; } = "var(--series-1)";
+
+    private static readonly System.Globalization.CultureInfo Culture =
+        System.Globalization.CultureInfo.InvariantCulture;
+
+    /// <summary>Bars are scaled to the largest value so the leader fills the track.</summary>
+    private double Width(double value)
+    {
+        var max = Items.Count == 0 ? 0 : Items.Max(i => i.Value);
+        if (max <= 0) return 0;
+        // Floor at a sliver so a non-zero value is never invisible.
+        return Math.Max(1.5, Math.Round(100.0 * value / max, 2));
+    }
+}

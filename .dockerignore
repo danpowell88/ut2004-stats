@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+.git/
+.gitignore
+*.md
+!README.md
+docker-compose.yml
+**/*.db
+**/*.db-shm
+**/*.db-wal

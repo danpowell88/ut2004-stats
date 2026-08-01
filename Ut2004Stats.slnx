@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ut2004Stats.Core/Ut2004Stats.Core.csproj" />
+    <Project Path="src/Ut2004Stats.Web/Ut2004Stats.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ut2004Stats.Core.Tests/Ut2004Stats.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>UT2004 Stats</title>
+    <meta name="description" content="Match reports, leaderboards and weapon breakdowns for an Unreal Tournament 2004 server." />
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Ut2004Stats.Web.styles.css"]" />
+    <ImportMap />
+    <HeadOutlet />
+    <script>
+        // Applied before first paint so a reload never flashes the wrong theme.
+        (function () {
+            try {
+                var saved = localStorage.getItem('theme');
+                if (saved) document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) { /* private mode — fall back to the OS preference */ }
+        })();
+
+        function toggleTheme() {
+            var root = document.documentElement;
+            var current = root.getAttribute('data-theme');
+            if (!current) {
+                // No explicit choice yet: flip away from whatever the OS asked for.
+                current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            var next = current === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', next);
+            try { localStorage.setItem('theme', next); } catch (e) { /* ignore */ }
+        }
+    </script>
+</head>
+
+<body>
+    <Routes />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>

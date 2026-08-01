@@ -1,0 +1,94 @@
+@page "/players"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@rendermode InteractiveServer
+@inject StatsQueries Stats
+
+<PageTitle>Players · UT2004 Stats</PageTitle>
+
+<div class="page-head">
+    <h1>Players</h1>
+    <p>Ranked by total frags across all tracked matches.</p>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <input class="search" type="search" placeholder="Search players…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+        <label class="row muted" style="font-size:13px; cursor:pointer">
+            <input type="checkbox" @bind="_includeBots" @bind:after="ReloadAsync" />
+            Include bots
+        </label>
+    </div>
+
+    @if (_filtered.Count == 0)
+    {
+        <p class="muted">No players match that search.</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="rank">#</th>
+                        <th class="name">Player</th>
+                        <th class="num">Matches</th>
+                        <th class="num">Frags</th>
+                        <th class="num">Deaths</th>
+                        <th class="num">K/D</th>
+                        <th class="num">Eff%</th>
+                        <th class="num">Frags/min</th>
+                        <th class="num">Hours</th>
+                        <th>Last seen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (p, i) in _filtered.Select((p, i) => (p, i)))
+                    {
+                        <tr>
+                            <td class="rank @Format.RankClass(i)">@(i + 1)</td>
+                            <td class="name">
+                                <a href="players/@p.PlayerId">@p.Name</a>
+                                @if (p.IsBot)
+                                {
+                                    <span class="pill pill-bot" style="margin-left:6px">BOT</span>
+                                }
+                            </td>
+                            <td class="num">@p.Matches</td>
+                            <td class="num">@p.Frags.ToString("N0")</td>
+                            <td class="num">@p.Deaths.ToString("N0")</td>
+                            <td class="num">@p.Ratio.ToString("0.00")</td>
+                            <td class="num">@p.Efficiency.ToString("0.0")</td>
+                            <td class="num">@p.FragsPerMinute.ToString("0.00")</td>
+                            <td class="num">@p.HoursPlayed.ToString("0.0")</td>
+                            <td class="muted">@Format.Ago(p.LastSeen)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<LeaderboardRow> _all = [];
+    private List<LeaderboardRow> _filtered = [];
+    private string _search = "";
+    private bool _includeBots;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _all = await Stats.GetLeaderboardAsync(take: 250, includeBots: _includeBots);
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = string.IsNullOrWhiteSpace(_search)
+            ? [.. _all]
+            : [.. _all.Where(p => p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))];
+    }
+}

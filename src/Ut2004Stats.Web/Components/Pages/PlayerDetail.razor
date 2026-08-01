@@ -1,0 +1,151 @@
+@page "/players/{Id:int}"
+@using Ut2004Stats.Core.Services
+@using Ut2004Stats.Web.Components.Shared
+@inject StatsQueries Stats
+
+<PageTitle>@(_player?.Name ?? "Player") · UT2004 Stats</PageTitle>
+
+@if (_loading)
+{
+    <p class="muted">Loading…</p>
+}
+else if (_player is null)
+{
+    <div class="card">
+        <div class="empty">
+            <div class="empty-title">Player not found</div>
+            <p><a href="players">Back to all players</a>.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="page-head">
+        <div class="row" style="gap: var(--s3)">
+            <h1>@_player.Name</h1>
+            @if (_player.IsBot)
+            {
+                <span class="pill pill-bot">BOT</span>
+            }
+        </div>
+        <p>
+            @_player.Matches matches · @_player.HoursPlayed.ToString("0.0") hours played ·
+            last seen @Format.Ago(_player.LastSeen)
+        </p>
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom: var(--s4)">
+        <StatTile Label="Frags" Value="@_player.Frags.ToString("N0")"
+                  Sub="@($"{_player.FragsPerMinute:0.00} per minute")" Accent="var(--series-1)" />
+        <StatTile Label="Deaths" Value="@_player.Deaths.ToString("N0")"
+                  Sub="@($"{_player.Suicides} suicides")" Accent="var(--series-2)" />
+        <StatTile Label="K/D Ratio" Value="@_player.Ratio.ToString("0.00")"
+                  Sub="@($"{_player.Efficiency:0.0}% efficiency")" Accent="var(--series-3)" />
+        <StatTile Label="Avg Score" Value="@_player.AvgScore.ToString("0.#")"
+                  Sub="per match" Accent="var(--accent)" />
+    </div>
+
+    <div class="grid grid-4" style="margin-bottom: var(--s4)">
+        <StatTile Label="Best Spree" Value="@(_player.BestSpree > 0 ? Format.Spree(_player.BestSpree) : "—")"
+                  Accent="var(--series-1)" />
+        <StatTile Label="Best Multi-Kill" Value="@(_player.BestMultiKill > 0 ? Format.MultiKill(_player.BestMultiKill) : "—")"
+                  Accent="var(--series-2)" />
+        <StatTile Label="Headshots" Value="@_player.Headshots.ToString("N0")"
+                  Accent="var(--series-3)" />
+        <StatTile Label="First Bloods" Value="@_player.FirstBloods.ToString("N0")"
+                  Accent="var(--accent)" />
+    </div>
+
+    <div class="grid grid-2" style="margin-bottom: var(--s4)">
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Favourite Weapons</h2>
+                    <p>Kills by weapon</p>
+                </div>
+            </div>
+            <BarList Items="_weapons" Color="var(--series-1)" />
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Rivalries</h2>
+                    <p>Kills for and against, by opponent</p>
+                </div>
+            </div>
+
+            @if (_rivals.Count == 0)
+            {
+                <p class="muted">No head-to-head data yet.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="name">Opponent</th>
+                                <th class="num">Killed</th>
+                                <th class="num">Died to</th>
+                                <th class="num">Net</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in _rivals)
+                            {
+                                var net = r.KilledThem - r.KilledBy;
+                                <tr>
+                                    <td class="name">@r.Opponent</td>
+                                    <td class="num">@r.KilledThem</td>
+                                    <td class="num">@r.KilledBy</td>
+                                    <td class="num" style="color: @(net > 0 ? "var(--good)" : net < 0 ? "var(--critical)" : "var(--text-muted)")">
+                                        @(net > 0 ? "+" : "")@net
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div>
+                <h2>Recent Matches</h2>
+                <p>Latest games featuring @_player.Name</p>
+            </div>
+        </div>
+        <MatchTable Matches="_matches" />
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private PlayerProfile? _player;
+    private IReadOnlyList<MatchSummary> _matches = [];
+    private IReadOnlyList<HeadToHead> _rivals = [];
+    private List<BarList.Item> _weapons = [];
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _player = await Stats.GetPlayerAsync(Id);
+
+        if (_player is not null)
+        {
+            _matches = await Stats.GetPlayerMatchesAsync(Id);
+            _rivals = await Stats.GetHeadToHeadAsync(Id);
+            _weapons = [.. (await Stats.GetPlayerWeaponsAsync(Id))
+                .Where(w => w.Kills > 0)
+                .Take(10)
+                .Select(w => new BarList.Item(w.Weapon, w.Kills, $"{w.Kills} · {w.SharePercent:0.#}%"))];
+        }
+
+        _loading = false;
+    }
+}

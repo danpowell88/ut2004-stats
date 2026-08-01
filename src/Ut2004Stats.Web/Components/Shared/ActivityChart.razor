@@ -1,0 +1,97 @@
+@*
+    Matches per day. A single series, so no legend is needed — the card title names
+    it. Points carry native <title> tooltips, so the hover layer works without any
+    JavaScript.
+
+    The SVG is composed in C# and emitted as markup because Razor reserves the
+    <text> element for its own content-switching syntax, which would otherwise
+    collide with SVG's <text>.
+*@
+
+@if (Points.Count == 0)
+{
+    <p class="muted">No activity yet.</p>
+}
+else
+{
+    @((MarkupString)BuildSvg())
+}
+
+@code {
+    public record Point(string Label, int Value);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Point> Points { get; set; } = [];
+    [Parameter] public string Noun { get; set; } = "match";
+    [Parameter] public string NounPlural { get; set; } = "matches";
+
+    private const double W = 720, H = 220;
+    private const double PadL = 38, PadR = 12, PadT = 12, PadB = 26;
+
+    private static readonly System.Globalization.CultureInfo Inv =
+        System.Globalization.CultureInfo.InvariantCulture;
+
+    private int Max => Points.Count == 0 ? 1 : Math.Max(1, Points.Max(p => p.Value));
+
+    private int LabelEvery => Math.Max(1, Points.Count / 6);
+
+    private double X(int i) =>
+        Points.Count <= 1 ? PadL : PadL + (W - PadL - PadR) * i / (Points.Count - 1);
+
+    private double Y(double value) => H - PadB - (H - PadB - PadT) * value / Max;
+
+    private static string F(double v) => v.ToString("0.##", Inv);
+
+    private string BuildSvg()
+    {
+        var sb = new System.Text.StringBuilder();
+
+        sb.Append($"""
+            <svg class="chart" viewBox="0 0 {F(W)} {F(H)}" role="img" style="height:{F(H)}px"
+                 preserveAspectRatio="none"
+                 aria-label="{Esc($"{NounPlural} per day over the last {Points.Count} days")}">
+            """);
+
+        // Gridlines with y labels — recessive, just enough to read magnitude.
+        var step = Math.Max(1, (int)Math.Ceiling(Max / 4.0));
+        for (var v = 0; v <= Max; v += step)
+        {
+            var y = Y(v);
+            sb.Append($"""<line class="grid-line" x1="{F(PadL)}" y1="{F(y)}" x2="{F(W - PadR)}" y2="{F(y)}" />""");
+            sb.Append($"""<text x="{F(PadL - 8)}" y="{F(y + 3)}" text-anchor="end">{v}</text>""");
+        }
+
+        var line = string.Join(' ',
+            Points.Select((p, i) => $"{(i == 0 ? "M" : "L")}{F(X(i))},{F(Y(p.Value))}"));
+
+        sb.Append($"""<path d="{line} L{F(X(Points.Count - 1))},{F(H - PadB)} L{F(X(0))},{F(H - PadB)} Z" fill="var(--series-1)" fill-opacity="0.14" />""");
+        sb.Append($"""<path d="{line}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />""");
+
+        // Markers only where something happened, to keep the line readable.
+        for (var i = 0; i < Points.Count; i++)
+        {
+            var p = Points[i];
+            if (p.Value <= 0) continue;
+
+            var noun = p.Value == 1 ? Noun : NounPlural;
+            sb.Append($"""
+                <circle cx="{F(X(i))}" cy="{F(Y(p.Value))}" r="3.5" fill="var(--series-1)"
+                        stroke="var(--surface-1)" stroke-width="2"><title>{Esc($"{p.Label}: {p.Value} {noun}")}</title></circle>
+                """);
+        }
+
+        sb.Append($"""<line class="axis-line" x1="{F(PadL)}" y1="{F(H - PadB)}" x2="{F(W - PadR)}" y2="{F(H - PadB)}" />""");
+
+        for (var i = 0; i < Points.Count; i++)
+        {
+            if (i % LabelEvery != 0 && i != Points.Count - 1) continue;
+            sb.Append($"""<text x="{F(X(i))}" y="{F(H - PadB + 16)}" text-anchor="middle">{Esc(Points[i].Label)}</text>""");
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    /// <summary>Labels are data, so they must be escaped before going into markup.</summary>
+    private static string Esc(string value) =>
+        System.Net.WebUtility.HtmlEncode(value);
+}
